@@ -53,8 +53,9 @@ export async function generateProductDescription(
 
 
 const generateProductDescriptionFlow = async (input: GenerateProductDescriptionInput): Promise<GenerateProductDescriptionOutput> => {
-    // Use failover system for generation
-    const failoverResult = await generateSingleWithFailover({
+    try {
+        // Use failover system for generation
+        const failoverResult = await generateSingleWithFailover({
       prompt: [
         {media: {url: input.garmentDataUri}},
         {text: `You are an expert e-commerce copywriter for high-end fashion brands like Zara and H&M.
@@ -116,6 +117,16 @@ Please respond with a JSON object containing:
             allKeysExhausted: failoverResult.keyResult.allKeysExhausted,
             failureSummary,
             attempts: failoverResult.attempts
+        };
+    }
+    } catch (error) {
+        console.error('Product Description Generation Error:', error);
+        return {
+            title: '',
+            description: '',
+            error: 'GENERATION_FAILED',
+            allKeysExhausted: false,
+            attempts: []
         };
     }
 };

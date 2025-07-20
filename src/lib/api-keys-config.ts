@@ -4,9 +4,9 @@
  */
 
 export const PREDEFINED_API_KEYS: string[] = [
-  'AIzaSyDMFSyZGDuEqVszRvsWDOqzJObETrGhWOs', // First API Key
-  'AIzaSyAn-DCl-t6DHIpmKur77WavxIGNrTKFC00', // Second API Key
-  'AIzaSyDDcWOQ4VLM2irFtaEdvbq21AT2QqzlESg', // Third API Key
+  // Add your backup Google Gemini API keys here
+  // Example: 'your-api-key-1',
+  // Example: 'your-api-key-2',
 ];
 
 // Note: The environment variable GOOGLE_API_KEY will be automatically 
