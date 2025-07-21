@@ -125,6 +125,10 @@ export async function generateWithFailover<T = any>(
         break;
       }
 
+      // Add delay between retries to avoid rate limiting
+      console.log('Waiting 2 seconds before trying next API key...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       // Continue to next key
       continue;
     }

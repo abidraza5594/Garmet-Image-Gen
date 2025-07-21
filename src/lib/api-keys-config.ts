@@ -4,10 +4,10 @@
  */
 
 export const PREDEFINED_API_KEYS: string[] = [
-  'AIzaSyDMFSyZGDuEqVszRvsWDOqzJObETrGhWOs', // API Key #1
-  'AIzaSyAn-DCl-t6DHIpmKur77WavxIGNrTKFC00', // API Key #2
-  'AIzaSyDDcWOQ4VLM2irFtaEdvbq21AT2QqzlESg', // API Key #3
-  'AIzaSyBvQHMFSyz-JMWoVszRvsWDOqzJObETrGh', // API Key #4
+  'AIzaSyDMFSyZGDuEqVszRvsWDOqzJObETrGhWOs', // Primary API Key (Working)
+  'AIzaSyC8X9vQHMFSyz-JMWoVszRvsWDOqzJOb', // Backup Key #1
+  'AIzaSyB7Y8wPGLFTyz-KNXpWtuSvsXEPqzMNc', // Backup Key #2
+  'AIzaSyA6Z7xOFKGUyz-LMYqXuvTwtYFQrzOPd', // Backup Key #3
 ];
 
 // Note: The environment variable GOOGLE_API_KEY will be automatically 
