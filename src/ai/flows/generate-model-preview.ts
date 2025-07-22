@@ -10,6 +10,8 @@
 // Removed ai import since we're using failover system
 import {z} from 'zod';
 import { generateMultipleImagesWithFailover } from '@/lib/ai-with-failover';
+import { getGarmentSubcategory } from '@/lib/garment-categories';
+import { getGarmentSpecificPrompts } from '@/ai/prompts/garment-specific-prompts';
 
 const GenerateECommerceImagesInputSchema = z.object({
   garmentDataUri: z
@@ -19,6 +21,9 @@ const GenerateECommerceImagesInputSchema = z.object({
     ),
   modelGender: z.enum(['male', 'female', 'any']).optional().default('any').describe('The desired gender of the fashion model.'),
   modelAge: z.string().optional().default('18-25').describe('The desired age range of the fashion model (e.g., "18-25", "25-35").'),
+  garmentCategory: z.string().optional().default('shirts').describe('The primary category of garment (shirts, pants, outerwear, etc.).'),
+  garmentSubcategory: z.string().optional().default('dress_shirts').describe('The specific subcategory of garment (dress_shirts, jeans, blazers, etc.).'),
+  garmentDescription: z.string().optional().default('').describe('Additional description of the garment characteristics and details.'),
   addWatermark: z.boolean().optional().describe("Whether to add a watermark to the images."),
   watermarkText: z.string().optional().describe("The text for the watermark."),
   apiKey: z.string().optional().describe('An optional API key to override the default.'),
@@ -222,18 +227,24 @@ FINAL RESULT:
 
 const generateECommerceImagesFlow = async (input: GenerateECommerceImagesInput): Promise<GenerateECommerceImagesOutput> => {
     const modelRequirements = getModelRequirements(input.modelGender || 'any', input.modelAge || '18-25');
+    const garmentCategory = input.garmentCategory || 'shirts';
+    const garmentSubcategory = input.garmentSubcategory || 'dress_shirts';
+    const garmentDescription = input.garmentDescription || '';
+
+    // Get specialized prompts for this garment type
+    const promptSet = getGarmentSpecificPrompts(garmentCategory, garmentSubcategory, garmentDescription, modelRequirements);
 
     const watermarkInstruction = (input.addWatermark && input.watermarkText)
       ? `\n\nWATERMARK REQUIREMENT: Add a subtle, semi-transparent watermark with the text "${input.watermarkText}" in the bottom right corner. The watermark should be professional and discreet, not interfering with the product visibility.`
       : "";
 
     const prompts = [
-        modelFrontPrompt.replace('{{{modelRequirements}}}', modelRequirements),
-        modelAnglePrompt.replace('{{{modelRequirements}}}', modelRequirements.split(',')[1].trim()), // Use a more generic requirement for the angle shot
-        ghostMannequinPrompt,
-        flatLayPrompt,
-        lifestylePrompt.replace('{{{modelRequirements}}}', modelRequirements),
-    ].map(p => p + watermarkInstruction);
+        promptSet.modelFront,
+        promptSet.modelAngle,
+        promptSet.ghostMannequin,
+        promptSet.flatLay,
+        promptSet.lifestyle,
+    ].map(p => `${p}${watermarkInstruction}`);
 
     const model = 'googleai/gemini-2.0-flash-preview-image-generation';
 

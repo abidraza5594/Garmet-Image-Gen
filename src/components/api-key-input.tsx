@@ -86,11 +86,18 @@ export default function ApiKeyInput({
         </div>
         <CardTitle className="text-xl">API Key Required</CardTitle>
         <CardDescription>
-          {failureSummary ? 
-            "All predefined API keys have been exhausted. Please provide your own Google Gemini API key to continue." :
+          {failureSummary ?
+            "All predefined API keys have been exhausted. Please provide your own Google Gemini API key to continue generating images." :
             "Please provide your Google Gemini API key to generate AI content."
           }
         </CardDescription>
+        {failureSummary && (
+          <div className="text-xs text-muted-foreground mt-2 space-y-1">
+            <p>• Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google AI Studio</a></p>
+            <p>• Free tier includes generous daily limits</p>
+            <p>• Your key is only used for this session</p>
+          </div>
+        )}
       </CardHeader>
       
       <CardContent className="space-y-4">

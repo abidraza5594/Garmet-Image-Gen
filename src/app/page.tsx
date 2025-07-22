@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogClose } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { GARMENT_CATEGORIES, getGarmentCategory, getGarmentSubcategory, type GarmentCategory, type GarmentSubcategory } from '@/lib/garment-categories';
 import {
   Carousel,
   CarouselContent,
@@ -53,6 +54,9 @@ export default function Home() {
   const [addWatermark, setAddWatermark] = useState(false);
   const [modelGender, setModelGender] = useState<ModelGender>('male');
   const [modelAge, setModelAge] = useState<ModelAge>('18-25');
+  const [selectedCategory, setSelectedCategory] = useState<string>('shirts');
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string>('dress_shirts');
+  const [garmentDescription, setGarmentDescription] = useState('');
   const [tempApiKey, setTempApiKey] = useState('');
   const [lastUsedApiKey, setLastUsedApiKey] = useState<string | undefined>();
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
@@ -78,6 +82,7 @@ export default function Home() {
     index?: number;
     status: 'trying' | 'success' | 'failed';
   } | undefined>();
+  const [isFailoverInProgress, setIsFailoverInProgress] = useState(false);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const { toast } = useToast();
@@ -166,6 +171,7 @@ export default function Home() {
     setLastUsedApiKey(apiKeyOverride);
     setApiKeyAttempts([]);
     setCurrentApiKeyAttempt(undefined);
+    setIsFailoverInProgress(false);
     
     // Don't clear content on retry
     if (!apiKeyOverride) {
@@ -184,10 +190,16 @@ export default function Home() {
           watermarkText: watermarkText,
           modelGender: modelGender,
           modelAge: modelAge,
+          garmentCategory: selectedCategory,
+          garmentSubcategory: selectedSubcategory,
+          garmentDescription: garmentDescription,
           ...(apiKeyOverride && { apiKey: apiKeyOverride }),
         }),
-        generateProductDescription({ 
+        generateProductDescription({
           garmentDataUri: image,
+          garmentCategory: selectedCategory,
+          garmentSubcategory: selectedSubcategory,
+          garmentDescription: garmentDescription,
           ...(apiKeyOverride && { apiKey: apiKeyOverride }),
         })
       ]);
@@ -209,7 +221,7 @@ export default function Home() {
         hasError = true;
       };
 
-      // Check for API key exhaustion in either result
+      // SILENT FAILOVER: Only show errors when ALL keys are exhausted
       const imageKeysExhausted = imageResult.allKeysExhausted;
       const textKeysExhausted = textResult.allKeysExhausted;
       const anyKeysExhausted = imageKeysExhausted || textKeysExhausted;
@@ -217,37 +229,42 @@ export default function Home() {
       const combinedFailureSummary = imageResult.failureSummary || textResult.failureSummary;
       const combinedError = imageResult.error || textResult.error;
 
-      // Update API key attempts from the results
+      // Update API key attempts from the results (for debugging/status)
       const allAttempts = [...(imageResult.attempts || []), ...(textResult.attempts || [])];
       if (allAttempts.length > 0) {
         setApiKeyAttempts(allAttempts);
-      }
-
-      if (combinedError) {
-        if (anyKeysExhausted) {
-          handleError(
-            'All API Keys Exhausted',
-            'All available API keys have been exhausted. Please provide your own Google Gemini API key to continue.',
-            true,
-            combinedFailureSummary
-          );
-        } else {
-          switch (combinedError) {
-            case 'MODEL_OVERLOADED':
-              handleError('Model is Busy', 'The AI model is currently overloaded. Please try again in a moment.');
-              break;
-            case 'QUOTA_EXCEEDED':
-              handleError('API Key Quota Reached', 'Your daily quota for the current API key has been exceeded. You can enter a new key below and retry.', true);
-              break;
-            case 'INTERNAL_ERROR':
-              handleError('AI Server Error', 'The AI service had a temporary problem. Please try again in a few moments.');
-              break;
-            default:
-              handleError('Generation Failed', 'An unknown error occurred while generating assets.');
-              break;
-          }
+        // Detect if failover happened (multiple attempts means failover was used)
+        const failedAttempts = allAttempts.filter(attempt => attempt.status === 'failed');
+        if (failedAttempts.length > 0) {
+          setIsFailoverInProgress(true);
         }
       }
+
+      // ONLY show errors when ALL API keys are exhausted
+      // This ensures silent failover - users don't see intermediate failures
+      if (combinedError && anyKeysExhausted) {
+        const totalAttempts = combinedFailureSummary?.totalAttempts || 0;
+        const quotaExceeded = combinedFailureSummary?.quotaExceeded || 0;
+        const invalidKeys = combinedFailureSummary?.invalidKeys || 0;
+
+        let detailedMessage = 'All available API keys have been exhausted. ';
+        if (quotaExceeded > 0) {
+          detailedMessage += `${quotaExceeded} key(s) reached their daily quota. `;
+        }
+        if (invalidKeys > 0) {
+          detailedMessage += `${invalidKeys} key(s) were invalid. `;
+        }
+        detailedMessage += 'Please provide your own Google Gemini API key to continue generating images.';
+
+        handleError(
+          'API Keys Exhausted',
+          detailedMessage,
+          true,
+          combinedFailureSummary
+        );
+      }
+      // If there's an error but keys aren't exhausted, the failover system is still working
+      // so we don't show any error to the user - they just see loading states
       
       setIsImageLoading(false);
       setIsTextLoading(false);
@@ -260,6 +277,7 @@ export default function Home() {
       setTempApiKey('');
       setAllKeysExhausted(false);
       setFailureSummary(undefined);
+      setIsFailoverInProgress(false);
 
       // Update API key attempts with success information
       const successAttempts = [...(imageResult.attempts || []), ...(textResult.attempts || [])];
@@ -427,6 +445,60 @@ export default function Home() {
                   </Select>
                </div>
             </CardContent>
+            <CardHeader className="pt-4">
+                <CardTitle className="font-headline">3. Garment Details</CardTitle>
+                <CardDescription>Specify the type of garment and its characteristics.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                     <Label htmlFor="garment-category">Garment Category</Label>
+                     <Select value={selectedCategory} onValueChange={(value) => {
+                       setSelectedCategory(value);
+                       const category = getGarmentCategory(value);
+                       if (category && category.subcategories.length > 0) {
+                         setSelectedSubcategory(category.subcategories[0].id);
+                       }
+                     }}>
+                         <SelectTrigger id="garment-category">
+                             <SelectValue placeholder="Select category" />
+                         </SelectTrigger>
+                         <SelectContent>
+                             {GARMENT_CATEGORIES.map((category) => (
+                               <SelectItem key={category.id} value={category.id}>
+                                 {category.label}
+                               </SelectItem>
+                             ))}
+                         </SelectContent>
+                     </Select>
+                  </div>
+                  <div>
+                     <Label htmlFor="garment-subcategory">Specific Type</Label>
+                     <Select value={selectedSubcategory} onValueChange={setSelectedSubcategory}>
+                         <SelectTrigger id="garment-subcategory">
+                             <SelectValue placeholder="Select type" />
+                         </SelectTrigger>
+                         <SelectContent>
+                             {getGarmentCategory(selectedCategory)?.subcategories.map((subcategory) => (
+                               <SelectItem key={subcategory.id} value={subcategory.id}>
+                                 {subcategory.label}
+                               </SelectItem>
+                             ))}
+                         </SelectContent>
+                     </Select>
+                  </div>
+               </div>
+               <div>
+                  <Label htmlFor="garment-description">Garment Description</Label>
+                  <Input
+                      id="garment-description"
+                      value={garmentDescription}
+                      onChange={(e) => setGarmentDescription(e.target.value)}
+                      placeholder={getGarmentSubcategory(selectedCategory, selectedSubcategory)?.placeholderText || 'Describe the garment details...'}
+                      className="mt-1"
+                  />
+               </div>
+            </CardContent>
             <CardFooter className="flex-col items-start gap-4 p-6">
                 <div className="flex items-center space-x-2">
                     <Checkbox id="watermark-upload" checked={addWatermark} onCheckedChange={(checked) => setAddWatermark(checked === true)} />
@@ -551,15 +623,25 @@ export default function Home() {
             <h2 className="font-headline text-2xl md:text-3xl text-center mb-6">Generated Images</h2>
 
             {isImageLoading && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                {[...Array(5)].map((_, i) => (
-                  <Card key={i} className="overflow-hidden">
-                    <Skeleton className="w-full aspect-square" />
-                    <div className="p-2">
-                      <Skeleton className="w-full h-10" />
+              <div className="space-y-4">
+                {isFailoverInProgress && (
+                  <div className="text-center text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                      <span>Optimizing generation quality...</span>
                     </div>
-                  </Card>
-                ))}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Card key={i} className="overflow-hidden">
+                      <Skeleton className="w-full aspect-square" />
+                      <div className="p-2">
+                        <Skeleton className="w-full h-10" />
+                      </div>
+                    </Card>
+                  ))}
+                </div>
               </div>
             )}
             
